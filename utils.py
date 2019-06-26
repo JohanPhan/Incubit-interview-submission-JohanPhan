@@ -63,3 +63,26 @@ def do_brightness_multiply(pic1, pic2, alpha=1):
     pic1 = [np.clip((alpha*pic1[i]), 0, 1) for i in range(len(pic1))]
     pic2 = np.clip((alpha*pic2), 0, 1)
     return pic1,pic2    
+def get_avg_score(train):
+    score = 0
+    score_lr = 0
+    for i in train:
+        lr, sm = get_lr_sm_from_scene(i)
+        hr = highres_image(i)[0]
+        sorted_by_clearance = np.sum(np.squeeze(sm, axis=1), axis = (1,2)).argsort()[-9:][::-1]
+        lr = np.squeeze(lr, axis = 1)[sorted_by_clearance]
+        lr = torch.tensor(lr)
+        lr = lr.unsqueeze(0)
+        lr = F.interpolate((lr), size = [384,384], mode =  'bicubic', align_corners = True) 
+        with torch.no_grad():
+            output = SR_sovler.model.cpu()(lr.float())
+        scene = i
+        output[output < 0] = 0
+        lr[lr < 0] = 0
+        #top_mean_split = torch.split(lr, 3, dim=1)        
+        #top_mean = torch.mean(top_mean_split[0], dim = 1).unsqueeze(1)  
+        lr_score = lr[0][0].numpy()
+        sr = output[0][0].numpy()
+        score += (score_image(sr, scene))    
+        score_lr += (score_image(lr_score, scene))    
+    print( score/len(train), score_lr/len(train))
